@@ -252,7 +252,7 @@ pub fn read_all(api: &HidApi, log: &mut Vec<String>) -> Vec<Reading> {
 
 /// `--probe`: one line per device.
 pub fn probe(api: &mut HidApi, log: &mut Vec<String>) -> Vec<String> {
-    crate::device::read_all(api, log)
+    crate::device::read_all(api, log, true)
         .into_iter()
         .map(|r| format!("{} · {} % · {:?} ({}){}", r.name, r.percent, r.charge, r.link, if r.approx { " ~" } else { "" }))
         .collect()

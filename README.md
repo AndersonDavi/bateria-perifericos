@@ -28,8 +28,8 @@ Para que arranque con Windows: clic derecho en el ícono → **Iniciar con Windo
 | Familia | Cómo se lee | Estado |
 |---|---|---|
 | **Logitech** con receptor LIGHTSPEED / Unifying / Bolt, o por cable | HID++ 2.0 (features 0x1004, 0x1000, 0x1001) | ✅ Probado con G305 X SUPERLIGHT |
-| **Corsair HS80 Max Wireless** | Protocolo "Void v2" y, si no responde, "bragi"/Slipstream | ⚠️ Sin probar con el audífono real |
-| Corsair Void v2 Wireless, Virtuoso Max, Virtuoso RGB SE/XT | Los mismos protocolos | ⚠️ Según protocolo documentado |
+| **Corsair HS80 MAX Wireless** (receptor `1b1c:2a0f`) | "bragi"/Slipstream en sus tres formatos y, si no responde, "Void v2" | ⚠️ En prueba |
+| Corsair Void v2, Virtuoso, Dark Core y otros receptores Corsair con canal `ff42` | Los mismos protocolos | ⚠️ Según protocolo documentado |
 | **Mandos** GameSir, Xbox y otros con protocolo Xbox | Windows.Gaming.Input (% real y carga); si no, XInput (4 niveles aprox.) | ⚠️ Sin probar con GameSir Cyclone 2 |
 
 Si tu dispositivo no aparece o lee mal: clic derecho en el ícono → **Generar diagnóstico**. Se abre `diagnostico.txt` con lo que expone cada receptor y las respuestas crudas (sin números de serie); adjúntalo en un [issue](https://github.com/AndersonDavi/bateria-perifericos/issues).

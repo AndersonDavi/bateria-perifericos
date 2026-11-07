@@ -9,6 +9,7 @@
 
 use crate::device::{Charge, Kind, Reading};
 use std::cell::Cell;
+use windows::Foundation::EventHandler;
 use windows::Gaming::Input::{Gamepad, RawGameController};
 use windows::System::Power::BatteryStatus;
 use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
@@ -27,8 +28,10 @@ fn ensure_winrt() {
             unsafe {
                 let _ = RoInitialize(RO_INIT_MULTITHREADED);
             }
-            // The controller list fills asynchronously; touching it early lets
-            // the first real poll see the pads.
+            // The controller list fills asynchronously, and only once someone
+            // listens for arrivals: subscribe (no-op handler, kept for the
+            // process lifetime) and touch the list so later polls see the pads.
+            let _ = RawGameController::RawGameControllerAdded(&EventHandler::new(|_, _| Ok(())));
             let _ = RawGameController::RawGameControllers();
             w.set(true);
         }
@@ -45,19 +48,32 @@ fn vendor_name(vid: u16) -> &'static str {
     }
 }
 
-pub fn read_all(log: &mut Vec<String>) -> Vec<Reading> {
+pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
     ensure_winrt();
+    if diag {
+        // A fresh process (--probe, first poll) may still be filling the list.
+        for _ in 0..10 {
+            if RawGameController::RawGameControllers().and_then(|l| l.Size()).unwrap_or(0) > 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+    }
     let mut out = Vec::new();
     match RawGameController::RawGameControllers() {
         Ok(list) => {
+            if diag {
+                log.push(format!("[Mando WGI] {} controles vistos por Windows", list.Size().unwrap_or(0)));
+            }
             for c in list {
-                // Only what Windows also exposes as a gamepad (not wheels, sticks...).
-                if Gamepad::FromGameController(&c).is_err() {
-                    continue;
-                }
                 let vid = c.HardwareVendorId().unwrap_or(0);
                 let pid = c.HardwareProductId().unwrap_or(0);
                 let display = c.DisplayName().map(|s| s.to_string()).unwrap_or_default();
+                // Only what Windows also exposes as a gamepad (not wheels, sticks...).
+                if Gamepad::FromGameController(&c).is_err() {
+                    log.push(format!("[Mando WGI] {vid:04x}:{pid:04x} '{display}': no es gamepad, se ignora"));
+                    continue;
+                }
                 let wireless = c.IsWireless().unwrap_or(false);
                 let report = c.TryGetBatteryReport().ok();
                 let remain = report.as_ref().and_then(|r| r.RemainingCapacityInMilliwattHours().ok()).and_then(|v| v.Value().ok());
@@ -93,17 +109,21 @@ pub fn read_all(log: &mut Vec<String>) -> Vec<Reading> {
         Err(e) => log.push(format!("[Mando WGI] error: {e}")),
     }
     if out.is_empty() {
-        out.extend(xinput(log));
+        out.extend(xinput(log, diag));
     }
     out
 }
 
-fn xinput(log: &mut Vec<String>) -> Vec<Reading> {
+fn xinput(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
     let mut out = Vec::new();
     for slot in 0..4u32 {
         let mut info = XINPUT_BATTERY_INFORMATION::default();
         let rc = unsafe { XInputGetBatteryInformation(slot, BATTERY_DEVTYPE_GAMEPAD, &mut info) };
         if rc != 0 {
+            if diag {
+                // 1167 = ERROR_DEVICE_NOT_CONNECTED
+                log.push(format!("[Mando XInput] ranura {slot}: código {rc}{}", if rc == 1167 { " (vacía)" } else { "" }));
+            }
             continue;
         }
         log.push(format!("[Mando XInput] ranura {slot}: tipo={:?} nivel={:?}", info.BatteryType, info.BatteryLevel));

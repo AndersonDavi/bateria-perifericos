@@ -92,7 +92,7 @@ fn main() {
             }
             let mut log = Vec::new();
             let readings = match api.as_mut() {
-                Some(a) => device::read_all(a, &mut log),
+                Some(a) => device::read_all(a, &mut log, matches!(cmd, Some(Cmd::Diag))),
                 None => Vec::new(),
             };
             if matches!(cmd, Some(Cmd::Diag)) {
