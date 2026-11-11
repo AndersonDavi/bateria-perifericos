@@ -39,6 +39,13 @@ fn ensure_winrt() {
     });
 }
 
+/// Models known by id: (vid, pid, name, has a battery).
+const MODELS: &[(u16, u16, &str, bool)] = &[
+    (0x3537, 0x0575, "GameSir Cyclone 2", true),
+    // Cable-only; Windows still hands out a made-up battery report for it.
+    (0x3537, 0x1073, "GameSir G7 SE", false),
+];
+
 fn vendor_name(vid: u16) -> &'static str {
     match vid {
         0x3537 => "Mando GameSir",
@@ -76,6 +83,11 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
                     log.push(format!("[Mando WGI] {vid:04x}:{pid:04x} '{display}': no es gamepad, se ignora"));
                     continue;
                 }
+                let model = MODELS.iter().find(|m| m.0 == vid && m.1 == pid);
+                if let Some(&(_, _, name, false)) = model {
+                    log.push(format!("[Mando WGI] {vid:04x}:{pid:04x} {name}: solo cable, sin batería; se ignora"));
+                    continue;
+                }
                 let wireless = c.IsWireless().unwrap_or(false);
                 let report = c.TryGetBatteryReport().ok();
                 let remain = report.as_ref().and_then(|r| r.RemainingCapacityInMilliwattHours().ok()).and_then(|v| v.Value().ok());
@@ -97,10 +109,11 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
                     _ => Charge::Discharging,
                 };
                 let generic = display.is_empty() || display.to_lowercase().contains("xbox");
-                let name = if generic || vid == 0x3537 { vendor_name(vid).to_string() } else { display };
-                // GameSir pads report one id on the cable and another through their
-                // receiver: one key so they keep a single icon and history.
-                let key = if vid == 0x3537 { "mando-gamesir".to_string() } else { format!("mando-{vid:04x}-{pid:04x}") };
+                let (name, key) = match model {
+                    Some(&(_, _, n, _)) => (n.to_string(), crate::device::slug(n)),
+                    None if generic || vid == 0x3537 => (vendor_name(vid).to_string(), format!("mando-{vid:04x}-{pid:04x}")),
+                    None => (display, format!("mando-{vid:04x}-{pid:04x}")),
+                };
                 pads.push((
                     Reading {
                         key,
@@ -119,23 +132,27 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
         Err(e) => log.push(format!("[Mando WGI] error: {e}")),
     }
 
-    // The battery report says "discharging" for a pad on a USB cable even while it
-    // charges (seen on the GameSir Cyclone 2). XInput's battery type does say
-    // "wired": a pad on the cable is getting power.
+    // Cable-only pads without a battery still get a battery report from Windows
+    // ("discharging", e.g. 100 of 1000 mWh on the GameSir G7 SE) while XInput says
+    // the slot is "wired". A pad on a cable can't be discharging, so that pairing is
+    // a made-up report and the pad is left out. A real battery pad on its cable
+    // reports charging/idle and stays.
     let types = xinput_types();
     let wired = types.iter().filter(|&&t| t == BATTERY_TYPE_WIRED.0).count();
-    let unsure_pads = pads.iter().filter(|p| !p.1).count();
     if wired > 0 && (pads.len() == 1 || wired == types.len()) {
-        for (r, wireless) in pads.iter_mut() {
-            if !*wireless {
-                r.link = "cable";
-                if r.charge == Charge::Discharging {
-                    r.charge = if r.percent >= 100 { Charge::Full } else { Charge::Charging };
-                }
+        pads.retain_mut(|(r, wireless)| {
+            if *wireless {
+                return true;
             }
-        }
+            if r.charge == Charge::Discharging {
+                log.push(format!("[Mando] {} por cable dice 'descargando': sin batería real, se oculta", r.name));
+                return false;
+            }
+            r.link = "cable";
+            true
+        });
     } else if diag && wired > 0 {
-        log.push(format!("[Mando] {wired} ranura(s) XInput por cable y {unsure_pads} mando(s) sin asignar; no se marca carga"));
+        log.push(format!("[Mando] {wired} ranura(s) XInput por cable sin poder asignarlas a un mando"));
     }
     out.extend(pads.into_iter().map(|p| p.0));
 

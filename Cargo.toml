@@ -1,6 +1,6 @@
 [package]
 name = "bateria-perifericos"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 description = "Batería de mouse, audífonos y mandos inalámbricos en la bandeja de Windows, sin las apps de cada marca"
 license = "MIT"
