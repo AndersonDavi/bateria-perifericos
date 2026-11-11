@@ -15,7 +15,8 @@ use windows::System::Power::BatteryStatus;
 use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 use windows::Win32::UI::Input::XboxController::{
     XInputGetBatteryInformation, BATTERY_DEVTYPE_GAMEPAD, BATTERY_LEVEL_EMPTY, BATTERY_LEVEL_FULL,
-    BATTERY_LEVEL_LOW, BATTERY_LEVEL_MEDIUM, BATTERY_TYPE_ALKALINE, BATTERY_TYPE_NIMH, XINPUT_BATTERY_INFORMATION,
+    BATTERY_LEVEL_LOW, BATTERY_LEVEL_MEDIUM, BATTERY_TYPE_ALKALINE, BATTERY_TYPE_DISCONNECTED, BATTERY_TYPE_NIMH,
+    BATTERY_TYPE_WIRED, XINPUT_BATTERY_INFORMATION,
 };
 
 thread_local! {
@@ -60,6 +61,7 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
         }
     }
     let mut out = Vec::new();
+    let mut pads: Vec<(Reading, bool)> = Vec::new();
     match RawGameController::RawGameControllers() {
         Ok(list) => {
             if diag {
@@ -79,8 +81,9 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
                 let remain = report.as_ref().and_then(|r| r.RemainingCapacityInMilliwattHours().ok()).and_then(|v| v.Value().ok());
                 let full = report.as_ref().and_then(|r| r.FullChargeCapacityInMilliwattHours().ok()).and_then(|v| v.Value().ok());
                 let status = report.as_ref().and_then(|r| r.Status().ok());
+                let rate = report.as_ref().and_then(|r| r.ChargeRateInMilliwatts().ok()).and_then(|v| v.Value().ok());
                 log.push(format!(
-                    "[Mando WGI] {vid:04x}:{pid:04x} '{display}' inalámbrico={wireless} estado={status:?} restante={remain:?} total={full:?}"
+                    "[Mando WGI] {vid:04x}:{pid:04x} '{display}' inalámbrico={wireless} estado={status:?} restante={remain:?} total={full:?} ritmo_mW={rate:?}"
                 ));
                 let (Some(remain), Some(full)) = (remain, full) else { continue };
                 if full <= 0 {
@@ -95,23 +98,64 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
                 };
                 let generic = display.is_empty() || display.to_lowercase().contains("xbox");
                 let name = if generic || vid == 0x3537 { vendor_name(vid).to_string() } else { display };
-                out.push(Reading {
-                    key: format!("mando-{vid:04x}-{pid:04x}"),
-                    name,
-                    kind: Kind::Controller,
-                    percent,
-                    charge,
-                    link: if wireless { "inalámbrico" } else { "cable" },
-                    approx: false,
-                });
+                // GameSir pads report one id on the cable and another through their
+                // receiver: one key so they keep a single icon and history.
+                let key = if vid == 0x3537 { "mando-gamesir".to_string() } else { format!("mando-{vid:04x}-{pid:04x}") };
+                pads.push((
+                    Reading {
+                        key,
+                        name,
+                        kind: Kind::Controller,
+                        percent,
+                        charge,
+                        // IsWireless is false for pads on a USB receiver too, so it can't tell.
+                        link: if wireless { "inalámbrico" } else { "receptor" },
+                        approx: false,
+                    },
+                    wireless,
+                ));
             }
         }
         Err(e) => log.push(format!("[Mando WGI] error: {e}")),
     }
+
+    // The battery report says "discharging" for a pad on a USB cable even while it
+    // charges (seen on the GameSir Cyclone 2). XInput's battery type does say
+    // "wired": a pad on the cable is getting power.
+    let types = xinput_types();
+    let wired = types.iter().filter(|&&t| t == BATTERY_TYPE_WIRED.0).count();
+    let unsure_pads = pads.iter().filter(|p| !p.1).count();
+    if wired > 0 && (pads.len() == 1 || wired == types.len()) {
+        for (r, wireless) in pads.iter_mut() {
+            if !*wireless {
+                r.link = "cable";
+                if r.charge == Charge::Discharging {
+                    r.charge = if r.percent >= 100 { Charge::Full } else { Charge::Charging };
+                }
+            }
+        }
+    } else if diag && wired > 0 {
+        log.push(format!("[Mando] {wired} ranura(s) XInput por cable y {unsure_pads} mando(s) sin asignar; no se marca carga"));
+    }
+    out.extend(pads.into_iter().map(|p| p.0));
+
     if out.is_empty() {
         out.extend(xinput(log, diag));
+    } else if diag {
+        let _ = xinput(log, diag);
     }
     out
+}
+
+/// Battery type of every connected XInput slot.
+fn xinput_types() -> Vec<u8> {
+    (0..4u32)
+        .filter_map(|slot| {
+            let mut info = XINPUT_BATTERY_INFORMATION::default();
+            let rc = unsafe { XInputGetBatteryInformation(slot, BATTERY_DEVTYPE_GAMEPAD, &mut info) };
+            (rc == 0 && info.BatteryType != BATTERY_TYPE_DISCONNECTED).then_some(info.BatteryType.0)
+        })
+        .collect()
 }
 
 fn xinput(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
