@@ -420,7 +420,10 @@ impl Dev {
         let left = st.left_text();
         let pct = format!("{}{} %", if r.approx { "~" } else { "" }, r.percent);
         let tip = if stale {
-            format!("{}\n{pct} (último dato {})\nNo responde: apagado o dormido", r.name, self.last_time)
+            // A pad on its charging base drops off its receiver exactly like a pad that
+            // is off (the Cyclone 2's receiver sends the same frames either way).
+            let why = if r.kind == Kind::Controller { "Apagado o en la base" } else { "No responde" };
+            format!("{}\n{pct} (último dato {})\n{why} · clic para buscar", r.name, self.last_time)
         } else {
             format!("{}\n{pct} · {}{left}\nActualizado {} ({})", r.name, charge_text(r.charge), self.last_time, r.link)
         };

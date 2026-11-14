@@ -23,6 +23,7 @@ pub struct Look {
 const RING: f32 = 1.9;
 const RIM: &str = "#05090B";
 const DETAIL: &str = "#0B1215";
+const GRAY: &str = "#9CA3AF";
 
 pub fn level_color(p: u8) -> &'static str {
     match p {
@@ -92,7 +93,8 @@ pub fn svg(l: &Look) -> String {
         return number_svg(p, l.charge, l.stale);
     }
     let s = shape(l.kind);
-    let color = l.percent.map(level_color).unwrap_or("#9CA3AF");
+    // Not answering (off, asleep, on its base): gray, still filled to the last %.
+    let color = if l.stale { GRAY } else { l.percent.map(level_color).unwrap_or(GRAY) };
 
     let fill = match l.percent {
         Some(p) => {
@@ -158,7 +160,13 @@ fn number_svg(p: u8, charge: Charge, stale: bool) -> String {
     let width = n * 3.0 * cell + (n - 1.0) * gap;
     let x0 = ((32.0 - width) / 2.0).round();
     let y0 = ((24.0 - 5.0 * cell) / 2.0).round();
-    let color = if charge != Charge::Discharging { "#F9FAFB" } else { level_color(p) };
+    let color = if stale {
+        GRAY
+    } else if charge != Charge::Discharging {
+        "#F9FAFB"
+    } else {
+        level_color(p)
+    };
 
     let (mut rim, mut lit) = (String::new(), String::new());
     for (i, ch) in text.bytes().enumerate() {
