@@ -47,6 +47,7 @@ Todo queda en `%LOCALAPPDATA%\BateriaPerifericos\`:
 |---|---|
 | `historial-<dispositivo>.csv` | Una fila cada vez que cambia el % o el estado: `unix,fecha,porcentaje,estado,via,uso_s` |
 | `ajustes.txt` | Opciones del menú |
+| `conocidos.txt` | Nombre y tipo de cada dispositivo visto; al arrancar, los que tuvieron lectura en las últimas 24 h salen atenuados aunque estén apagados |
 | `respaldo.txt` | (Opcional) carpeta donde copiar los historiales, por ejemplo `G:\Mi unidad\BateriaPerifericos`. Si el respaldo tiene más historia que el local (PC nueva, reinstalación), se restaura solo. |
 | `grafico.html`, `diagnostico.txt` | Se generan al pedirlos desde el menú |
 
