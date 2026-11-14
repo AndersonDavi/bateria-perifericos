@@ -61,8 +61,18 @@ struct Memo {
 }
 
 static MEMO: Mutex<Option<HashMap<u16, Memo>>> = Mutex::new(None);
-/// While nothing has worked, retry the full set at most this often.
-const RETRY_ALL: Duration = Duration::from_secs(10 * 60);
+/// While nothing has worked, retry the full set at most this often. Just under the
+/// 90 s battery poll, so a headset that comes back (powered on, switched from
+/// Bluetooth back to the receiver) shows up on the next round.
+const RETRY_ALL: Duration = Duration::from_secs(80);
+
+/// Drops the "nothing answered" marks so the next read tries every method right
+/// away (manual refresh, a USB device plugged or unplugged).
+pub fn forget_failures() {
+    if let Some(m) = MEMO.lock().unwrap().as_mut() {
+        m.values_mut().for_each(|memo| memo.failed_at = None);
+    }
+}
 
 fn name_and_kind(pid: u16, product: &str) -> (String, Kind) {
     if let Some(&(_, n, k)) = KNOWN.iter().find(|k| k.0 == pid) {

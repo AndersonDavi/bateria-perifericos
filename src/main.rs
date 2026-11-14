@@ -91,6 +91,9 @@ fn main() {
                 api = hidapi::HidApi::new().ok();
             }
             let mut log = Vec::new();
+            if cmd.is_some() {
+                corsair::forget_failures();
+            }
             let readings = match api.as_mut() {
                 Some(a) => device::read_all(a, &mut log, matches!(cmd, Some(Cmd::Diag))),
                 None => Vec::new(),
