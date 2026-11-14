@@ -125,8 +125,10 @@ fn main() {
         }
     });
 
-    let mut devs: Vec<Dev> = Vec::new();
-    let mut idle: Option<Idle> = Some(Idle::new(&settings));
+    // Devices seen in the last 24 h start dimmed with their last value, so one that
+    // is off (or on Bluetooth, on its base...) when the app starts still has its icon.
+    let mut devs: Vec<Dev> = restore_known(&settings);
+    let mut idle: Option<Idle> = if devs.is_empty() { Some(Idle::new(&settings)) } else { None };
 
     unsafe {
         SetTimer(std::ptr::null_mut(), 0, 400, None);
@@ -161,6 +163,7 @@ fn main() {
                                     let adopt = r.kind == Kind::Mouse && !devs.iter().any(|d| d.last.kind == Kind::Mouse);
                                     match Dev::new(r.clone(), adopt, &settings) {
                                         Some(d) => {
+                                            remember(&r);
                                             devs.push(d);
                                             devs.len() - 1
                                         }
@@ -480,6 +483,88 @@ impl Dev {
         let (img, side) = icon::render(&icon::svg(&look), size);
         let _ = notify::show(self.tray.window_handle(), &title, &body, warn, Some((&img, side)));
     }
+}
+
+/// `conocidos.txt`: one line per device ever seen, `key<TAB>name<TAB>kind<TAB>link`.
+/// The history CSVs hold the values but not the name or icon shape.
+const KNOWN_FILE: &str = "conocidos.txt";
+
+fn kind_str(k: Kind) -> &'static str {
+    match k {
+        Kind::Mouse => "mouse",
+        Kind::Keyboard => "teclado",
+        Kind::Headset => "audifonos",
+        Kind::Controller => "mando",
+    }
+}
+
+fn kind_of(s: &str) -> Option<Kind> {
+    Some(match s {
+        "mouse" => Kind::Mouse,
+        "teclado" => Kind::Keyboard,
+        "audifonos" => Kind::Headset,
+        "mando" => Kind::Controller,
+        _ => return None,
+    })
+}
+
+fn link_of(s: &str) -> &'static str {
+    ["receptor", "cable", "inalámbrico", "XInput", "Windows"].into_iter().find(|l| *l == s).unwrap_or("receptor")
+}
+
+/// Adds or updates a device in `conocidos.txt`.
+fn remember(r: &Reading) {
+    let Some(dir) = stats::data_dir() else { return };
+    let path = dir.join(KNOWN_FILE);
+    let line = format!("{}\t{}\t{}\t{}", r.key, r.name, kind_str(r.kind), r.link);
+    let old = std::fs::read_to_string(&path).unwrap_or_default();
+    if old.lines().any(|l| l == line) {
+        return;
+    }
+    let mut lines: Vec<&str> = old.lines().filter(|l| !l.is_empty() && l.split('\t').next() != Some(&r.key)).collect();
+    lines.push(&line);
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(&path, lines.join("\n") + "\n");
+}
+
+/// Dimmed icons for known devices whose history has a reading from the last 24 h.
+fn restore_known(s: &Settings) -> Vec<Dev> {
+    let Some(dir) = stats::data_dir() else { return Vec::new() };
+    let known = std::fs::read_to_string(dir.join(KNOWN_FILE)).unwrap_or_default();
+    let now = stats::now();
+    let mut out = Vec::new();
+    for l in known.lines() {
+        let f: Vec<&str> = l.split('\t').collect();
+        let [key, name, kind, link] = f[..] else { continue };
+        let Some(kind) = kind_of(kind) else { continue };
+        // Last CSV row: unix,fecha,porcentaje,estado,via,uso_s
+        let csv = std::fs::read_to_string(dir.join(format!("historial-{key}.csv"))).unwrap_or_default();
+        let Some(last) = csv.lines().rev().find(|l| l.split(',').next().is_some_and(|t| t.parse::<u64>().is_ok())) else { continue };
+        let c: Vec<&str> = last.split(',').collect();
+        let (Some(t), Some(fecha), Some(pct)) = (
+            c.first().and_then(|v| v.parse::<u64>().ok()),
+            c.get(1),
+            c.get(2).and_then(|v| v.parse::<u8>().ok()),
+        ) else {
+            continue;
+        };
+        let age = Duration::from_secs(now.saturating_sub(t));
+        if age >= KEEP_MISSING {
+            continue;
+        }
+        let charge = match c.get(3).copied() {
+            Some("cargando") => Charge::Charging,
+            Some("completa") => Charge::Full,
+            _ => Charge::Discharging,
+        };
+        let r = Reading { key: key.into(), name: name.into(), kind, percent: pct, charge, link: link_of(link), approx: false };
+        let Some(mut d) = Dev::new(r, false, s) else { continue };
+        d.last_time = fecha.get(11..).unwrap_or(fecha).to_string();
+        d.missing_since = Some(Instant::now().checked_sub(age).unwrap_or_else(Instant::now));
+        d.show(s);
+        out.push(d);
+    }
+    out
 }
 
 fn tray_icon_of(look: &icon::Look) -> Icon {
