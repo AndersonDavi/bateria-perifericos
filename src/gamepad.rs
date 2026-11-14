@@ -42,6 +42,9 @@ fn ensure_winrt() {
 /// Models known by id: (vid, pid, name, has a battery).
 const MODELS: &[(u16, u16, &str, bool)] = &[
     (0x3537, 0x0575, "GameSir Cyclone 2", true),
+    // Cyclone 2 receiver in XInput mode (dongle on the charging base, base on USB).
+    // XInput calls the slot "wired", so the made-up-report rule below must skip it.
+    (0x3537, 0x100B, "GameSir Cyclone 2", true),
     // Cable-only; Windows still hands out a made-up battery report for it.
     (0x3537, 0x1073, "GameSir G7 SE", false),
 ];
@@ -68,7 +71,8 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
         }
     }
     let mut out = Vec::new();
-    let mut pads: Vec<(Reading, bool)> = Vec::new();
+    // (reading, IsWireless, model known to have a battery)
+    let mut pads: Vec<(Reading, bool, bool)> = Vec::new();
     match RawGameController::RawGameControllers() {
         Ok(list) => {
             if diag {
@@ -126,6 +130,7 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
                         approx: false,
                     },
                     wireless,
+                    model.is_some_and(|m| m.3),
                 ));
             }
         }
@@ -140,8 +145,9 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
     let types = xinput_types();
     let wired = types.iter().filter(|&&t| t == BATTERY_TYPE_WIRED.0).count();
     if wired > 0 && (pads.len() == 1 || wired == types.len()) {
-        pads.retain_mut(|(r, wireless)| {
-            if *wireless {
+        pads.retain_mut(|(r, wireless, battery)| {
+            // Known battery pads on their own receiver also sit in a "wired" slot.
+            if *wireless || *battery {
                 return true;
             }
             if r.charge == Charge::Discharging {
@@ -154,7 +160,7 @@ pub fn read_all(log: &mut Vec<String>, diag: bool) -> Vec<Reading> {
     } else if diag && wired > 0 {
         log.push(format!("[Mando] {wired} ranura(s) XInput por cable sin poder asignarlas a un mando"));
     }
-    out.extend(pads.into_iter().map(|p| p.0));
+    out.extend(pads.into_iter().map(|(r, _, _)| r));
 
     if out.is_empty() {
         out.extend(xinput(log, diag));
