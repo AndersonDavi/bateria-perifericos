@@ -30,7 +30,8 @@ Para que arranque con Windows: clic derecho en el ícono → **Iniciar con Windo
 | **Logitech** con receptor LIGHTSPEED / Unifying / Bolt, o por cable | HID++ 2.0 (features 0x1004, 0x1000, 0x1001) | ✅ Probado con G305 X SUPERLIGHT |
 | **Corsair HS80 MAX Wireless** (receptor `1b1c:2a0f`) | "bragi"/Slipstream en sus tres formatos y, si no responde, "Void v2" | ✅ Probado, también con iCUE abierto |
 | Corsair Void v2, Virtuoso, Dark Core y otros receptores Corsair con canal `ff42` | Los mismos protocolos | ⚠️ Según protocolo documentado |
-| **Mandos** GameSir, Xbox y otros con protocolo Xbox | Windows.Gaming.Input (% real y carga); si nada responde, XInput (4 niveles aprox.) | ✅ Probado con GameSir Cyclone 2 por receptor |
+| **GameSir Cyclone 2** con su receptor (también en la base de carga) | Canal privado del receptor: reporte `0x12` tras un heartbeat, como hace GameSir Connect (Windows le reporta siempre "lleno") | ✅ Probado |
+| **Mandos** Xbox y otros con protocolo Xbox | Windows.Gaming.Input (% real y carga); si nada responde, XInput (4 niveles aprox.) | ⚠️ Según la API de Windows |
 
 Los mandos solo de cable (sin batería, como el GameSir G7 SE) no muestran ícono: Windows igual les inventa un reporte de batería, y la app lo descarta cuando XInput dice "con cable" y ese reporte dice "descargando".
 

@@ -43,6 +43,7 @@ pub fn read_all(api: &mut HidApi, log: &mut Vec<String>, diag: bool) -> Vec<Read
     let mut out = crate::hidpp::read_all(api, log);
     out.extend(crate::corsair::read_all(api, log, diag));
     out.extend(crate::gamepad::read_all(log, diag));
+    crate::gamesir::apply(api, &mut out, log);
     if diag {
         // Controller receivers' private channels (GameSir): only listened to, no writes.
         for d in api.device_list().filter(|d| d.vendor_id() == 0x3537 && d.usage_page() >= 0xFF00) {

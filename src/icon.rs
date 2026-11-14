@@ -67,7 +67,9 @@ fn shape(kind: Kind) -> Shape {
         Kind::Controller => Shape {
             body: r#"<path d="M9.5 7.5 H22.5 C26.5 7.5 29 10 30 14.5 L31.2 22 C31.8 26.5 28.5 28.6 26 26 L22.5 22 H9.5 L6 26 C3.5 28.6 0.2 26.5 0.8 22 L2 14.5 C3 10 5.5 7.5 9.5 7.5 Z"/>"#,
             band: "",
-            details: r#"<path d="M8.5 12.5 V18.5 M5.5 15.5 H11.5" stroke-width="1.9"/><circle cx="23" cy="13.6" r="1.4" stroke="none"/><circle cx="23" cy="17.4" r="1.4" stroke="none"/>"#,
+            // Lighter than the mouse's line: the cross and buttons cover more of a smaller
+            // body, and at full opacity they made the pad look a shade darker.
+            details: r#"<g opacity="0.55"><path d="M8.5 12.5 V18.5 M5.5 15.5 H11.5" stroke-width="1.6"/><circle cx="23" cy="13.6" r="1.2" stroke="none"/><circle cx="23" cy="17.4" r="1.2" stroke="none"/></g>"#,
             vertical: false,
             from: 0.8,
             to: 31.2,

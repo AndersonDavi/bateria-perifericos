@@ -4,6 +4,7 @@ mod corsair;
 mod device;
 mod diag;
 mod gamepad;
+mod gamesir;
 mod graph;
 mod hidpp;
 mod icon;
