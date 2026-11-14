@@ -31,6 +31,9 @@ Para que arranque con Windows: clic derecho en el ícono → **Iniciar con Windo
 | **Corsair HS80 MAX Wireless** (receptor `1b1c:2a0f`) | "bragi"/Slipstream en sus tres formatos y, si no responde, "Void v2" | ✅ Probado, también con iCUE abierto |
 | Corsair Void v2, Virtuoso, Dark Core y otros receptores Corsair con canal `ff42` | Los mismos protocolos | ⚠️ Según protocolo documentado |
 | **GameSir Cyclone 2** con su receptor (también en la base de carga) | Canal privado del receptor: reporte `0x12` tras un heartbeat, como hace GameSir Connect (Windows le reporta siempre "lleno") | ✅ Probado |
+
+El Cyclone 2 se apaga al ponerlo en su base y el receptor deja de dar datos. Si lo pones **encendido**, alcanza a avisar "cargando" antes de apagarse y el ícono queda con el rayo y el % que tenía (`~`); si lo pones apagado, se ve gris ("Apagado o en la base"). Con Home se enciende en la base y muestra la carga en vivo.
+
 | **Mandos** Xbox y otros con protocolo Xbox | Windows.Gaming.Input (% real y carga); si nada responde, XInput (4 niveles aprox.) | ⚠️ Según la API de Windows |
 
 Los mandos solo de cable (sin batería, como el GameSir G7 SE) no muestran ícono: Windows igual les inventa un reporte de batería, y la app lo descarta cuando XInput dice "con cable" y ese reporte dice "descargando".

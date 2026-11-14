@@ -82,6 +82,7 @@ fn main() {
     let mut settings = Settings::load();
 
     // Worker thread: asks every reader, then waits (or refreshes on demand).
+    gamesir::spawn_watcher();
     let (msg_tx, msg_rx) = mpsc::channel::<Msg>();
     let (cmd_tx, cmd_rx) = mpsc::channel::<Cmd>();
     std::thread::spawn(move || {
@@ -143,6 +144,10 @@ fn main() {
             let changed = DEVICE_CHANGED_AT.load(Ordering::Relaxed);
             if changed != 0 && now_ms().saturating_sub(changed) >= 1500 {
                 DEVICE_CHANGED_AT.store(0, Ordering::Relaxed);
+                let _ = cmd_tx.send(Cmd::Refresh);
+            }
+
+            if gamesir::CHANGED.swap(false, Ordering::Relaxed) {
                 let _ = cmd_tx.send(Cmd::Refresh);
             }
 
@@ -512,7 +517,7 @@ fn kind_of(s: &str) -> Option<Kind> {
 }
 
 fn link_of(s: &str) -> &'static str {
-    ["receptor", "cable", "inalámbrico", "XInput", "Windows"].into_iter().find(|l| *l == s).unwrap_or("receptor")
+    ["receptor", "cable", "inalámbrico", "XInput", "Windows", "base"].into_iter().find(|l| *l == s).unwrap_or("receptor")
 }
 
 /// Adds or updates a device in `conocidos.txt`.
@@ -560,6 +565,10 @@ fn restore_known(s: &Settings) -> Vec<Dev> {
             Some("completa") => Charge::Full,
             _ => Charge::Discharging,
         };
+        // Left on its base before the app closed: still there until it says otherwise.
+        if c.get(4).copied() == Some("base") && charge == Charge::Charging {
+            gamesir::set_docked(pct);
+        }
         let r = Reading { key: key.into(), name: name.into(), kind, percent: pct, charge, link: link_of(link), approx: false };
         let Some(mut d) = Dev::new(r, false, s) else { continue };
         d.last_time = fecha.get(11..).unwrap_or(fecha).to_string();
@@ -768,6 +777,7 @@ fn now_ms() -> u64 {
 unsafe extern "system" fn device_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     if msg == WM_DEVICECHANGE && (wp == DBT_DEVICEARRIVAL as usize || wp == DBT_DEVICEREMOVECOMPLETE as usize) {
         DEVICE_CHANGED_AT.store(now_ms(), Ordering::Relaxed);
+        gamesir::USB_GEN.fetch_add(1, Ordering::Relaxed);
     }
     DefWindowProcW(hwnd, msg, wp, lp)
 }
