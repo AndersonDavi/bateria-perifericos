@@ -34,6 +34,7 @@ Para que arranque con Windows: clic derecho en el ícono → **Iniciar con Windo
 
 El Cyclone 2 se apaga al ponerlo en su base y el receptor deja de dar datos. Si lo pones **encendido**, alcanza a avisar "cargando" antes de apagarse y el ícono queda con el rayo y el % que tenía (`~`); si lo pones apagado, se ve gris ("Apagado o en la base"). Con Home se enciende en la base y muestra la carga en vivo.
 
+| **AULA F108 Pro** con su receptor 2.4G (`05AC:024F`) | Mismo pedido que hace el software oficial de AULA cada 15 s: reporte de 33 bytes `20 01` al canal privado del receptor; responde el % en el byte 3. Por cable (`0C45:800A`) se muestra cargando con el último % | ✅ Probado |
 | **Mandos** Xbox y otros con protocolo Xbox | Windows.Gaming.Input (% real y carga); si nada responde, XInput (4 niveles aprox.) | ⚠️ Según la API de Windows |
 
 Los mandos solo de cable (sin batería, como el GameSir G7 SE) no muestran ícono: Windows igual les inventa un reporte de batería, y la app lo descarta cuando XInput dice "con cable" y ese reporte dice "descargando".

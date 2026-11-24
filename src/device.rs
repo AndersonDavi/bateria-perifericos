@@ -42,6 +42,7 @@ pub fn read_all(api: &mut HidApi, log: &mut Vec<String>, diag: bool) -> Vec<Read
     }
     let mut out = crate::hidpp::read_all(api, log);
     out.extend(crate::corsair::read_all(api, log, diag));
+    out.extend(crate::aula::read_all(api, log));
     out.extend(crate::gamepad::read_all(log, diag));
     crate::gamesir::apply(api, &mut out, log);
     if diag {
