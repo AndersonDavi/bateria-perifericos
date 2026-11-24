@@ -41,15 +41,32 @@ pub fn read_all(api: &HidApi, log: &mut Vec<String>) -> Vec<Reading> {
     };
     let Ok(dev) = api.open_path(d.path()) else {
         log.push("[AULA] no se pudo abrir el dongle".into());
-        return Vec::new();
+        return missed(log);
     };
+    // A request now and then goes unanswered (the keyboard dozes between keys):
+    // ask again on the spot before counting it as a miss.
+    for _ in 0..3 {
+        match ask(&dev, log) {
+            Some(level) => {
+                *LAST.lock().unwrap() = Some(level);
+                *MISSES.lock().unwrap() = 0;
+                return vec![reading(level, Charge::Discharging, "receptor", false)];
+            }
+            None => std::thread::sleep(Duration::from_millis(150)),
+        }
+    }
+    missed(log)
+}
+
+/// One battery request; Some(%) on a valid answer.
+fn ask(dev: &hidapi::HidDevice, log: &mut Vec<String>) -> Option<u8> {
     let mut out = [0u8; 33];
     out[1] = 0x20;
     out[2] = 0x01;
     out[32] = out.iter().fold(0u8, |a, b| a.wrapping_add(*b));
     if let Err(e) = dev.write(&out) {
         log.push(format!("[AULA] pedido rechazado ({e})"));
-        return Vec::new();
+        return None;
     }
     let start = Instant::now();
     let mut buf = [0u8; 64];
@@ -61,14 +78,28 @@ pub fn read_all(api: &HidApi, log: &mut Vec<String>) -> Vec<Reading> {
         log.push(format!("[AULA] <- {}", hex(&buf[..n.min(16)])));
         // 0 = no answer from the keyboard (off, asleep or out of range).
         let level = buf[3];
-        if level == 0 || level > 100 {
-            return Vec::new();
-        }
-        *LAST.lock().unwrap() = Some(level);
-        return vec![reading(level, Charge::Discharging, "receptor", false)];
+        return (1..=100).contains(&level).then_some(level);
     }
     log.push("[AULA] el dongle no contestó".into());
-    Vec::new()
+    None
+}
+
+/// Rounds in a row without an answer before the icon goes gray (~5 min at 90 s).
+const MAX_MISSES: u32 = 3;
+static MISSES: Mutex<u32> = Mutex::new(0);
+
+/// No answer this round: keep showing the last % for a few rounds, so a keyboard
+/// that dozed off for a moment doesn't flash gray.
+fn missed(log: &mut Vec<String>) -> Vec<Reading> {
+    let mut m = MISSES.lock().unwrap();
+    *m += 1;
+    match *LAST.lock().unwrap() {
+        Some(last) if *m <= MAX_MISSES => {
+            log.push(format!("[AULA] sin respuesta ({}/{MAX_MISSES}), se mantiene {last} %", *m));
+            vec![reading(last, Charge::Discharging, "receptor", false)]
+        }
+        _ => Vec::new(),
+    }
 }
 
 fn reading(percent: u8, charge: Charge, link: &'static str, approx: bool) -> Reading {
